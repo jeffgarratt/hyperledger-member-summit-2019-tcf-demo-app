@@ -1,10 +1,12 @@
 package com.example.app
 
+import com.github.jeffgarratt.hl.fabric.sdk.Bootstrap.ChannelId
 import com.github.jeffgarratt.hl.fabric.sdk._
 import com.google.protobuf.ByteString
 import main.app.{AppDescriptor, AppDescriptors, Query}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
+import org.bouncycastle.util.encoders.Hex
 import org.hyperledger.fabric.protos.peer.chaincode.ChaincodeSpec
 import org.hyperledger.fabric.protos.peer.proposal_response.ProposalResponse
 import org.scalatest.{AppendedClues, FunSpec, GivenWhenThen}
@@ -17,16 +19,16 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
 
   val ctx = BootstrapSpec.getContext(projectName)
 
-  val user = ctx.getDirectory.get.users.find(_.name == "dev0Org0").get
-  val nodeAdminTuple = Directory.natsForUser(ctx.getDirectory.get, user)(0)
-  val cchExample02 = new ChaincodeHelper(ctx, user, nodeAdminTuple, endorsers = List("peer0"))
+  val dev0Org0 = ctx.getDirectory.get.users.find(_.name == "dev0Org0").get
+  val nodeAdminTuple = Directory.natsForUser(ctx.getDirectory.get, dev0Org0)(0)
+  val cchExample02 = new ChaincodeHelper(ctx, dev0Org0, nodeAdminTuple, endorsers = List("peer0"))
   // partial func helpers for building chaincode specs and invocation specs
   val defaultChannelName = "com.peerorg0.blockchain.channel.medical"
   val getChaincodeSpec = Endorser.getChaincodeSpec(chaincodeType = ChaincodeSpec.Type.GOLANG, path = "github.com/hyperledger/fabric/examples/chaincode/go/marketplace/app_mgr", name = "appmgr", _: List[ByteString], version = "1.0")
   val getInvocationSpec = Endorser.InvocationSpec(_: ChaincodeSpec, channelName = Some(defaultChannelName), proposalResponseHandler = Some(Endorser.getHandler(AppDescriptors)))
 
-  val deliverSpecOrderer0 = Deliver.DeliverSpec(user, nodeAdminTuple, defaultChannelName, "orderer0", port = 7050, seekInfo = Deliver.seekInfoAllAndWait, timeout = 10 minutes)
-  val deliverSpecPeer0 = Deliver.DeliverSpec(user, nodeAdminTuple, defaultChannelName, "peer0", port = 7051, seekInfo = Deliver.seekInfoAllAndWait, timeout = 10 minutes)
+  val deliverSpecOrderer0 = Deliver.DeliverSpec(dev0Org0, nodeAdminTuple, defaultChannelName, "orderer0", port = 7050, seekInfo = Deliver.seekInfoAllAndWait, timeout = 10 minutes)
+  val deliverSpecPeer0 = Deliver.DeliverSpec(dev0Org0, nodeAdminTuple, defaultChannelName, "peer0", port = 7051, seekInfo = Deliver.seekInfoAllAndWait, timeout = 10 minutes)
   val broadcastSpecOrderer0 = Orderer.BroadcastSpec(nodeName = "orderer0", timeout = 10 minutes)
 
   def getMedicalChannelForOrg(medicalOrg : Organization) = {
@@ -36,6 +38,12 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
   val peerOrg0 = ctx.getDirectory.get.orgs.find(_.name == "peerOrg0").get
   val peerOrg1 = ctx.getDirectory.get.orgs.find(_.name == "peerOrg1").get
   val peerOrg2 = ctx.getDirectory.get.orgs.find(_.name == "peerOrg2").get
+
+  val dev0Org1 = ctx.getDirectory.get.users.find(_.name == "dev0Org1").get
+  val natDev0Org1 = Directory.natsForUser(ctx.getDirectory.get, dev0Org1)(0)
+  val dev0Org2 = ctx.getDirectory.get.users.find(_.name == "dev0Org2").get
+  val natDev0Org2 = Directory.natsForUser(ctx.getDirectory.get, dev0Org2)(0)
+
   val dev0Org7 = ctx.getDirectory.get.users.find(_.name == "dev0Org7").get
   val natDev0Org7 = Directory.natsForUser(ctx.getDirectory.get, dev0Org7)(0)
   val cc = cchExample02.copy(user = dev0Org7, node_admin_tuple = natDev0Org7, endorsers = List("peer0"))
@@ -53,6 +61,9 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
     })
   }
 
+  val createRequestIdTask = Task.eval {
+      s"REQ-${new String(Hex.encode(Bootstrap.getNonce.toByteArray))}"
+  }
 
   def getTask[A](ccFunc: => Either[String, List[Either[String, Endorser.Interaction[A]]]], timeout: Duration = 1 seconds) = {
     val task = Task.eval({
@@ -66,8 +77,8 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
   }
 
   // Invoker tasks
-  def getCreateAppDescriptor(chaincodeHelper: ChaincodeHelper, user: User, appDescriptorKey : String, appDescriptor: AppDescriptor) = {
-    val gis = Endorser.InvocationSpec(_: ChaincodeSpec, channelName = Some(defaultChannelName), proposalResponseHandler = Some(Endorser.getHandler(AppDescriptor)))
+  def getCreateAppDescriptor(chaincodeHelper: ChaincodeHelper, user: User, channelName : ChannelId, appDescriptorKey : String, appDescriptor: AppDescriptor) = {
+    val gis = Endorser.InvocationSpec(_: ChaincodeSpec, channelName = Some(channelName), proposalResponseHandler = Some(Endorser.getHandler(AppDescriptor)))
     Task.eval({
       val taskInvoker = getTask(chaincodeHelper.send(gis(getChaincodeSpec(List(ByteString.copyFromUtf8("createAppDescriptor"), ByteString.copyFromUtf8(appDescriptorKey), appDescriptor.toByteString)))))
       val interactions = Await.result(taskInvoker.runToFuture, 1 seconds)
@@ -78,6 +89,19 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
 //      val signedTx = Bootstrap.createSignedTransaction(user, irSet).right.get
 //      signedTx
     })
+  }
+
+  def getCreateMedicalRecordInteraction(nat : NodeAdminTuple, targetPeer : String, key : String, value : AppDescriptor)  = {
+    val channelId = getMedicalChannelForOrg(nat.org)
+    val result = Await.result(getCreateAppDescriptor(cchExample02.copy(user = nat.user, node_admin_tuple = nat, endorsers = List(targetPeer)), nat.user, channelId, key, value).runToFuture, 1.seconds)
+    result._1 match {
+      case Right(signedTx) => {
+        val task = Task.eval(signedTx)
+        val interaction = ctx.Interaction(task, broadcastSpecOrderer0, deliverSpecPeer0.copy(nodeName = targetPeer, signer = nat.user, nodeAdminTuple = nat, channelId = channelId))
+        Right(interaction)
+      }
+      case Left(msg) => Left(msg)
+    }
   }
 
   // Invoker tasks
@@ -97,7 +121,7 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
 
     it("should support basic querying") {
 
-      Given(s"I have a user ${user.name}")
+      Given(s"I have a user ${dev0Org0.name}")
 
       When("user queries for 'a'")
       val queryAResult = retryWithDelay(queryPeer0,.2 seconds, 5).runToFuture
@@ -112,9 +136,9 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
 
     it("should support deliver on orderer0") {
 
-      Given(s"I have a user ${user.name}")
+      Given(s"I have a user ${dev0Org0.name}")
 
-      When(s"user ${user.name} requests deliver")
+      When(s"user ${dev0Org0.name} requests deliver")
       val deliveryFromOrderer0 = ctx.getDeliveryFromOrderer(deliverSpecOrderer0)
 
       Then("the last block should be available")
@@ -124,9 +148,9 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
 
     it("should support deliver on peer0") {
 
-      Given(s"I have a user ${user.name}")
+      Given(s"I have a user ${dev0Org0.name}")
 
-      When(s"user ${user.name} requests deliver on Peer0")
+      When(s"user ${dev0Org0.name} requests deliver on Peer0")
       val delivery = ctx.getDeliveryFromPeer(deliverSpecPeer0)
 
       Then("the last block should be available")
@@ -141,10 +165,11 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
 
     it("should support non-memoized interaction") {
 
-      Given(s"I have a user ${user.name}")
+      Given(s"I have a user ${dev0Org0.name}")
 
       When("user invokes the transfer operation from a to b of value 10")
-      val fullTxTask = ctx.getFullTxTask(getInvoker(cchExample02, user,"a", "b", "10"), broadcastSpecOrderer0, deliverSpecPeer0)
+
+      val fullTxTask = ctx.getFullTxTask(getInvoker(cchExample02, dev0Org0,"a", "b", "10"), broadcastSpecOrderer0, deliverSpecPeer0)
       val result = fullTxTask.runToFuture
       Await.result(result, 3 seconds)
 
@@ -159,10 +184,12 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
 
     it("should support memoized interaction") {
 
-      Given(s"I have a user ${user.name}")
+      Given(s"I have a user ${dev0Org0.name}")
 
       When("user invokes the transfer operation from b to a of value 10")
-      val interaction = ctx.Interaction(getInvoker(cchExample02, user,"b", "a", "10"), broadcastSpecOrderer0, deliverSpecPeer0)
+      val requestId = Await.result(createRequestIdTask.runToFuture, 1.seconds)
+      val createAppDescriptorTask = getCreateAppDescriptor(cchExample02, dev0Org0, getMedicalChannelForOrg(peerOrg0), requestId, AppDescriptor(description = "105"))
+      val interaction = ctx.Interaction(getInvoker(cchExample02, dev0Org0,"b", "a", "10"), broadcastSpecOrderer0, deliverSpecPeer0)
       val result = interaction.fullTxTask.runToFuture
       Await.result(result, 3 seconds)
 
@@ -180,8 +207,8 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
   describe("CSSC System chaincode interaction") {
 
     it("should support invocation of channel list from peer0 and peer1 for user dev0Org0") {
-      Given(s"I have a user ${user.name}")
-      val csscHelper = new CsccHelper(ctx, user, nodeAdminTuple, endorsers = List("peer0", "peer1"))
+      Given(s"I have a user ${dev0Org0.name}")
+      val csscHelper = new CsccHelper(ctx, dev0Org0, nodeAdminTuple, endorsers = List("peer0", "peer1"))
 
       When("user invokes the channel list operation")
       val irSet = Await.result(ChaincodeHelper.getTask(csscHelper.getChannelList).runToFuture, 1.seconds)
