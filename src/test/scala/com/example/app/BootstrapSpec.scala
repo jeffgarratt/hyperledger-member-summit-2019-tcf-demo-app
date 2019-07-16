@@ -93,15 +93,16 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
 
   def getCreateMedicalRecordInteraction(nat : NodeAdminTuple, targetPeer : String, key : String, value : AppDescriptor)  = {
     val channelId = getMedicalChannelForOrg(nat.org)
-    val result = Await.result(getCreateAppDescriptor(cchExample02.copy(user = nat.user, node_admin_tuple = nat, endorsers = List(targetPeer)), nat.user, channelId, key, value).runToFuture, 1.seconds)
-    result._1 match {
-      case Right(signedTx) => {
-        val task = Task.eval(signedTx)
-        val interaction = ctx.Interaction(task, broadcastSpecOrderer0, deliverSpecPeer0.copy(nodeName = targetPeer, signer = nat.user, nodeAdminTuple = nat, channelId = channelId))
-        Right(interaction)
+    Task.eval({
+      val result = Await.result(getCreateAppDescriptor(cchExample02.copy(user = nat.user, node_admin_tuple = nat, endorsers = List(targetPeer)), nat.user, channelId, key, value).runToFuture, 1.seconds)
+      result._1 match {
+        case Right(signedTx) => {
+          val interaction = ctx.Interaction(Task.eval(signedTx), broadcastSpecOrderer0, deliverSpecPeer0.copy(nodeName = targetPeer, signer = nat.user, nodeAdminTuple = nat, channelId = channelId))
+          Right(interaction, result._2)
+        }
+        case Left(msg) => Left(msg, result._2)
       }
-      case Left(msg) => Left(msg)
-    }
+    })
   }
 
   // Invoker tasks
