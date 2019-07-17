@@ -91,8 +91,7 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
     })
   }
 
-  def getCreateMedicalRecordInteraction(nat : NodeAdminTuple, targetPeer : String, key : String, value : AppDescriptor)  = {
-    val channelId = getMedicalChannelForOrg(nat.org)
+  def getCreateRecordInteraction(nat : NodeAdminTuple, targetPeer : String, channelId: ChannelId, key : String, value : AppDescriptor)  = {
     Task.eval({
       val result = Await.result(getCreateAppDescriptor(cchExample02.copy(user = nat.user, node_admin_tuple = nat, endorsers = List(targetPeer)), nat.user, channelId, key, value).runToFuture, 1.seconds)
       result._1 match {
