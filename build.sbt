@@ -28,4 +28,6 @@ PB.targets in Compile := Seq(
 libraryDependencies += "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf"
 
 
-
+libraryDependencies += "com.typesafe.akka" %% "akka-http"   % "10.1.9"
+libraryDependencies +="com.typesafe.akka" %% "akka-stream" % "2.5.23" // or whatever the latest version is
+libraryDependencies += "com.typesafe.akka" %% "akka-http-spray-json" % "10.1.9"
