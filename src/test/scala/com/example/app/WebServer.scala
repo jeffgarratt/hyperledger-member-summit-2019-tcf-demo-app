@@ -5,7 +5,7 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.server.Directives._
 import akka.stream.ActorMaterializer
-import com.github.jeffgarratt.hl.fabric.sdk.User
+import com.github.jeffgarratt.hl.fabric.sdk.{Organization, User}
 import spray.json.DefaultJsonProtocol
 import akka.http.scaladsl.server.directives.ContentTypeResolver.Default
 
@@ -15,10 +15,11 @@ import scala.io.StdIn
 // collect your json format instances into a support trait:
 trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
   implicit val userFormat = jsonFormat3(User)
+  implicit val orgFormat = jsonFormat4(Organization)
 }
 
 
-object WebServer extends JsonSupport{
+object WebServer extends JsonSupport {
 
   val bootstrapSpec = new BootstrapSpec("33fce552a84511e98d7502d158fa0198")
 
@@ -32,16 +33,19 @@ object WebServer extends JsonSupport{
 
     val route =
       concat(
-      path("vue" ) {
-        getFromFile("./src/main/web/index.html") // uses implicit ContentTypeResolver
-      }
-      ,path("users") {
-        get {
-          val users = bootstrapSpec.ctx.getDirectory.get.users
-          //          complete(HttpEntity(ContentTypes.`text/html(UTF-8)`, "<h1>Say hello to akka-http</h1>"))
-          complete(users)
+        path("vue") {
+          getFromFile("./src/main/web/index.html") // uses implicit ContentTypeResolver
         }
-      }
+        , path("users") {
+          get {
+            complete(bootstrapSpec.ctx.getDirectory.get.users)
+          }
+        }, path("orgs") {
+          get {
+            val orgs = bootstrapSpec.ctx.getDirectory.get.orgs
+            complete(orgs)
+          }
+        }
       )
 
     val bindingFuture = Http().bindAndHandle(route, "0.0.0.0", 7051)

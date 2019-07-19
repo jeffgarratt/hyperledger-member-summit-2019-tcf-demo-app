@@ -1,6 +1,6 @@
 <div id="app">
     <ul>
-        <li v-for="product in products">{{ product.name }}</li>
+        <li v-for="user in users">{{ user.name }}</li>
     </ul>
 </div>
 
@@ -10,13 +10,13 @@
     const app = new Vue({
         el: '#app',
         data: {
-            products: []
+            users: []
         },
         created() {
             fetch('users')
                 .then(response => response.json())
                 .then(json => {
-                    this.products = json
+                    this.users = json.sort((t1,t2) => t1.name < t2.name ? -1 : 1)
             })
         }
     })
