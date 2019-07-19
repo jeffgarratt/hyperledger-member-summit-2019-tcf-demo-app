@@ -1,6 +1,12 @@
 <div id="app">
-    <ul>
+    <ul>Users
         <li v-for="user in users">{{ user.name }}</li>
+    </ul>
+    <ul>Orgs
+        <li v-for="org in orgs">{{ org.name }}</li>
+    </ul>
+    <ul>Worker
+        <li v-for="record in worker">{{ record }}</li>
     </ul>
 </div>
 
@@ -10,13 +16,25 @@
     const app = new Vue({
         el: '#app',
         data: {
-            users: []
+            users: [],
+            orgs: [],
+            worker: []
         },
         created() {
             fetch('users')
                 .then(response => response.json())
                 .then(json => {
                     this.users = json.sort((t1,t2) => t1.name < t2.name ? -1 : 1)
+            })
+            fetch('orgs')
+                .then(response => response.json())
+                .then(json => {
+                    this.orgs = json.sort((t1,t2) => t1.name < t2.name ? -1 : 1)
+            })
+            fetch('worker')
+                .then(response => response.json())
+                .then(json => {
+                    this.worker = json
             })
         }
     })

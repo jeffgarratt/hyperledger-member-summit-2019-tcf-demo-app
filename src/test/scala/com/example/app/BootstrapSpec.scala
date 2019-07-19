@@ -52,6 +52,8 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
   val queryPeer2 = getQuery(Query(), cc.copy(endorsers = List("peer2")), Some(getMedicalChannelForOrg(peerOrg2)))
   val queryAllMedical = Task.gatherUnordered(List(queryPeer0,queryPeer1,queryPeer2))
 
+  val queryPeer7 = getQuery(Query(), cc.copy(endorsers = List("peer7")), Some("com.peerorg7.blockchain.channel.worker"))
+
   // Query for a value, use a factory to create query tasks
   def getQuery(query: Query, chaincodeHelper: ChaincodeHelper, channelName :Option[String] = Some(defaultChannelName)) = {
     val getInvocationSpec = Endorser.InvocationSpec(_: ChaincodeSpec, channelName = channelName, proposalResponseHandler = Some(Endorser.getHandler(AppDescriptors)))
