@@ -8,6 +8,7 @@ import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.directives.ContentTypeResolver.Default
 import akka.stream.ActorMaterializer
 import com.github.jeffgarratt.hl.fabric.sdk.{Organization, User}
+import com.typesafe.config.ConfigFactory
 import spray.json.DefaultJsonProtocol
 
 import scala.io.StdIn
@@ -21,8 +22,10 @@ trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
 }
 
 object WebServer extends JsonSupport {
-
-  val bootstrapSpec = new BootstrapSpec("33fce552a84511e98d7502d158fa0198")
+  // Load our own config values from the default location, application.conf
+  val conf = ConfigFactory.load()
+  val prototypeProjectName = conf.getString("fabric.prototype.projectName")
+  val bootstrapSpec = new BootstrapSpec(prototypeProjectName)
 
   def main(args: Array[String]) {
 
@@ -35,6 +38,12 @@ object WebServer extends JsonSupport {
       concat(
         path("vue") {
           getFromFile("./src/main/web/index.html") // uses implicit ContentTypeResolver
+        },
+        path("network") {
+          getFromFile(conf.getString("fabric.prototype.network.jsonFile")) // uses implicit ContentTypeResolver
+        },
+        pathPrefix("web") {
+          getFromDirectory("./src/main/web") // uses implicit ContentTypeResolver
         }
         , path("users") {
           get {
