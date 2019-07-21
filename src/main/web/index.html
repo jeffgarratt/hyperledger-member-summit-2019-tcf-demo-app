@@ -5,12 +5,12 @@
 <div class="nav-bar"></div>
 <div id="app">
     <div id="entities" class="product">
-        <div id="users" class="product-info">Users
+        <div id="users" class="product-info">Users [{{ users.length }}]
             <ul class="v-list">
                 <li v-for="user in users">{{ user.name }}</li>
             </ul>
         </div>
-        <div id="orgs" class="product-info">Orgs
+        <div id="orgs" class="product-info">Orgs [{{ orgs.length }}]
             <ul class="v-list">
                 <li v-for="org in orgs">{{ org.name }} </li>
             </ul>
@@ -32,7 +32,8 @@
         data: {
             users: [],
             orgs: [],
-            worker: []
+            worker: [],
+            polling: null
         },
         computed: {
             worker_peer_id: function() {
@@ -41,6 +42,20 @@
             worker_records: function () {
                 return this.worker[this.worker_peer_id]
             }
+        },
+        methods: {
+            pollData () {
+                this.polling = setInterval(() => {
+                    fetch('worker')
+                        .then(response => response.json())
+                        .then(json => {
+                            this.worker = json
+                        })
+                }, 3000)
+            }
+        },
+        beforeDestroy () {
+            clearInterval(this.polling)
         },
         created() {
             fetch('users')
@@ -58,6 +73,7 @@
                 .then(json => {
                     this.worker = json
             })
+            this.pollData()
         }
     })
 
