@@ -9,23 +9,50 @@ import akka.http.scaladsl.server.directives.ContentTypeResolver.Default
 import akka.stream.ActorMaterializer
 import com.github.jeffgarratt.hl.fabric.sdk.{Organization, User}
 import com.typesafe.config.ConfigFactory
+import monix.eval.Task
 import spray.json.DefaultJsonProtocol
 
 import scala.io.StdIn
 import scala.util.{Failure, Success}
 
 
+
+case class Resp(key: String, value: String)
+
+case class Req(key: String, value: String, resp: Option[Resp])
+
+
 // collect your json format instances into a support trait:
 trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
   implicit val userFormat = jsonFormat3(User)
   implicit val orgFormat = jsonFormat4(Organization)
+  implicit val respFormat = jsonFormat2(Resp)
+  implicit val reqFormat = jsonFormat3(Req)
 }
+
 
 object WebServer extends JsonSupport {
   // Load our own config values from the default location, application.conf
   val conf = ConfigFactory.load()
   val prototypeProjectName = conf.getString("fabric.prototype.projectName")
   val bootstrapSpec = new BootstrapSpec(prototypeProjectName)
+
+
+  def getRequestFromRecords(records: Map[String, String]) = {
+    val allRequestKeys = records.keys.filter(x => x.startsWith("REQ"))
+    val results = allRequestKeys.map(reqKey => {
+      val respKey = "RESP" + reqKey.substring(3)
+      records.get(respKey) match {
+        case Some(resp) => {
+          Req(reqKey, records.get(reqKey).get, Some(Resp(respKey, resp)))
+        }
+        case None => {
+          Req(reqKey, records.get(reqKey).get, None)
+        }
+      }
+    })
+    results.toList
+  }
 
   def main(args: Array[String]) {
 
@@ -61,6 +88,17 @@ object WebServer extends JsonSupport {
               case Success(value) => {
                 val r = value.map { case (k, v) => (k, v.descriptors.map { case (k1, v1) => (k1, v1.description) }) }
                 complete(r)
+              }
+              case Failure(ex) => complete((InternalServerError, s"An error occurred: ${ex.getMessage}"))
+            }
+          }
+        }, path("worker2") {
+          get {
+            val result = bootstrapSpec.queryPeer7.flatMap(x => Task.eval(x.values.head.descriptors.map { case (a, b) => (a, b.description) })).runToFuture(monix.execution.Scheduler.Implicits.global)
+            onComplete(result) {
+              case Success(value) => {
+                // Now get array of Req objects.
+                complete(getRequestFromRecords(value))
               }
               case Failure(ex) => complete((InternalServerError, s"An error occurred: ${ex.getMessage}"))
             }

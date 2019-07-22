@@ -15,9 +15,9 @@
                 <li v-for="org in orgs">{{ org.name }} </li>
             </ul>
         </div>
-        <div id="workers" >Worker Peer ID: {{ worker_peer_id }}
+        <div id="workers" >Worker
             <ul class="v-list">
-                <li v-for="(value, name) in worker_records" >{{ name }} => {{ value }}</li>
+                <li v-for="(value, name) in worker_records" >{{ value.key }}  => {{ value.resp ? value.resp.key : "PENDING" }}</li>
             </ul>
         </div>
     </div>
@@ -36,17 +36,14 @@
             polling: null
         },
         computed: {
-            worker_peer_id: function() {
-                return Object.keys(this.worker)[0]
-            },
             worker_records: function () {
-                return this.worker[this.worker_peer_id]
+                return this.worker
             }
         },
         methods: {
             pollData () {
                 this.polling = setInterval(() => {
-                    fetch('worker')
+                    fetch('worker2')
                         .then(response => response.json())
                         .then(json => {
                             this.worker = json
@@ -68,7 +65,7 @@
                 .then(json => {
                     this.orgs = json.sort((t1,t2) => t1.name < t2.name ? -1 : 1)
             })
-            fetch('worker')
+            fetch('worker2')
                 .then(response => response.json())
                 .then(json => {
                     this.worker = json
