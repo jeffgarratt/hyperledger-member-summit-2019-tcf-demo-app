@@ -1,13 +1,22 @@
 package com.example.app
 
+import java.io.{ByteArrayInputStream, StringReader}
+import java.security.Signature
+import java.security.cert.CertificateFactory
+import java.time.{LocalDateTime, ZoneOffset}
+
 import com.github.jeffgarratt.hl.fabric.sdk.Bootstrap.ChannelId
 import com.github.jeffgarratt.hl.fabric.sdk._
 import com.google.protobuf.ByteString
 import main.app.{AppDescriptor, AppDescriptors, Query}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
+import org.bouncycastle.openssl.PEMParser
 import org.bouncycastle.util.encoders.Hex
+import org.hyperledger.fabric.protos.common.common.{ChannelHeader, Header}
+import org.hyperledger.fabric.protos.msp.identities.SerializedIdentity
 import org.hyperledger.fabric.protos.peer.chaincode.ChaincodeSpec
+import org.hyperledger.fabric.protos.peer.proposal.Proposal
 import org.hyperledger.fabric.protos.peer.proposal_response.ProposalResponse
 import org.scalatest.{AppendedClues, FunSpec, GivenWhenThen}
 
@@ -38,6 +47,7 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
   val peerOrg0 = ctx.getDirectory.get.orgs.find(_.name == "peerOrg0").get
   val peerOrg1 = ctx.getDirectory.get.orgs.find(_.name == "peerOrg1").get
   val peerOrg2 = ctx.getDirectory.get.orgs.find(_.name == "peerOrg2").get
+  val peerOrg7 = ctx.getDirectory.get.orgs.find(_.name == "peerOrg7").get
 
   val dev0Org1 = ctx.getDirectory.get.users.find(_.name == "dev0Org1").get
   val natDev0Org1 = Directory.natsForUser(ctx.getDirectory.get, dev0Org1)(0)
@@ -54,6 +64,52 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
 
   val queryPeer7 = getQuery(Query(), cc.copy(endorsers = List("peer7")), Some("com.peerorg7.blockchain.channel.worker"))
 
+
+  def getLocalDateTime(proposal : Proposal ) = {
+    val header = Header.parseFrom(proposal.header.toByteArray)
+    val channelHeader = ChannelHeader.parseFrom(header.channelHeader.toByteArray)
+    LocalDateTime.ofEpochSecond(channelHeader.timestamp.get.seconds, channelHeader.timestamp.get.nanos, ZoneOffset.UTC)
+  }
+
+  /*
+  * Validates the proposalResponse that represents the ability of an insurer to get medical info.
+  *
+  * */
+  def validateSig(pr : ProposalResponse) = {
+    // First verify the signature on the proposalResponse
+    val certificateFactory = CertificateFactory.getInstance("X509")
+    val si = SerializedIdentity.parseFrom(pr.endorsement.get.endorser.toByteArray)
+    val certAsString = new String(si.idBytes.toByteArray)
+    val pp = new PEMParser(new StringReader(certAsString))
+    val x509DataSigner = pp.readPemObject.getContent
+    val certPeerSigner = certificateFactory.generateCertificate(new ByteArrayInputStream(x509DataSigner))
+    val ecdsaSign = Signature.getInstance("SHA256withECDSA", "BC")
+    ecdsaSign.initVerify(certPeerSigner.getPublicKey)
+    // Signature is across Payload + SerializedIdentity
+    val buffer = pr.payload.toByteArray ++ si.toByteArray
+    ecdsaSign.update(buffer)
+    val verified = ecdsaSign.verify(pr.endorsement.get.signature.toByteArray)
+
+    // Now get the MSP org, and verify they signed the public Key of signer
+    ctx.getDirectory.get.orgs.find(o => o.name == si.mspid) match {
+      case Some(mspOrg) => {
+        val ppMspOrg = new PEMParser(new StringReader(mspOrg.selfSignedCert.get))
+        val x509DataMspOrg = ppMspOrg.readPemObject.getContent
+        val certForMspOrg = certificateFactory.generateCertificate(new ByteArrayInputStream(x509DataMspOrg))
+        try {
+          certPeerSigner.verify(certForMspOrg.getPublicKey)
+          Right(verified)
+        } catch {
+          case e: Exception => {
+            Left(s"The result of signature verification was ${verified}, but could NOT verify the MSP signed the signatory's certificate: ${e}")
+          }
+        }
+      }
+      case None =>
+        Left(s"The result of signature verification was ${verified}, but could NOT validate proposalResponse, MSP org not found for mspID = ${si.mspid}")
+    }
+  }
+
   // Query for a value, use a factory to create query tasks
   def getQuery(query: Query, chaincodeHelper: ChaincodeHelper, channelName :Option[String] = Some(defaultChannelName)) = {
     val getInvocationSpec = Endorser.InvocationSpec(_: ChaincodeSpec, channelName = channelName, proposalResponseHandler = Some(Endorser.getHandler(AppDescriptors)))
@@ -62,6 +118,16 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
       irSet.map(ir => (ir.interaction.endorser, ir.extractedResponse.getOrElse(AppDescriptors(descriptors = Map("UNEXPECTED RESPONSE" -> AppDescriptor(description = ir.interaction.getProposalResponse.toString)))))).toMap
     })
   }
+
+  // Query for a value, use a factory to create query tasks
+  def getQueryRaw(query: Query, chaincodeHelper: ChaincodeHelper, channelName :Option[String] = Some(defaultChannelName)) = {
+    val getInvocationSpec = Endorser.InvocationSpec(_: ChaincodeSpec, channelName = channelName, proposalResponseHandler = Some(Endorser.getHandler(AppDescriptors)))
+    Task.eval({
+      val irSet = Await.result(ChaincodeHelper.getTask(chaincodeHelper.send(getInvocationSpec(getChaincodeSpec(List(ByteString.copyFromUtf8("getAppDescriptors"), query.toByteString))))).runToFuture, 1.seconds)
+      irSet
+    })
+  }
+
 
   val createRequestIdTask = Task.eval {
       s"REQ-${new String(Hex.encode(Bootstrap.getNonce.toByteArray))}"
