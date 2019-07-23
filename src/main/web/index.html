@@ -15,6 +15,11 @@
                 <li v-for="org in orgs">{{ org.name }} </li>
             </ul>
         </div>
+        <div id="medical" >Medical
+            <ul class="v-list">
+                <li v-for="value in medical" >{{ value[0] }} => {{ value[1] }}</li>
+            </ul>
+        </div>
         <div id="workers" >Worker
             <ul class="v-list">
                 <li v-for="(value, name) in worker_records" >{{ value.key }}  => {{ value.resp ? value.resp.key : "PENDING" }}</li>
@@ -33,6 +38,7 @@
             users: [],
             orgs: [],
             worker: [],
+            medical: [],
             polling: null
         },
         computed: {
@@ -69,6 +75,11 @@
                 .then(response => response.json())
                 .then(json => {
                     this.worker = json
+            })
+            fetch('medical')
+                .then(response => response.json())
+                .then(json => {
+                    this.medical = json
             })
             this.pollData()
         }

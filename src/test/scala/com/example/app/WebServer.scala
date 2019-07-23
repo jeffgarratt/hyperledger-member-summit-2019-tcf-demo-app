@@ -81,6 +81,17 @@ object WebServer extends JsonSupport {
             val orgs = bootstrapSpec.ctx.getDirectory.get.orgs
             complete(orgs)
           }
+        }, path("medical") {
+          get {
+            val result = bootstrapSpec.queryAllMedical.runToFuture(monix.execution.Scheduler.Implicits.global)
+            onComplete(result) {
+              case Success(value) => {
+                val result = value.map(m => m.keys.head -> m.values.head.descriptors.map { case (a, b) => (a, b.description) })
+                complete(result.sortBy(x => x._1))
+              }
+              case Failure(ex) => complete((InternalServerError, s"An error occurred: ${ex.getMessage}"))
+            }
+          }
         }, path("worker") {
           get {
             val result = bootstrapSpec.queryPeer7.runToFuture(monix.execution.Scheduler.Implicits.global)
