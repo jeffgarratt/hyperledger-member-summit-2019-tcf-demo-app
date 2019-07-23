@@ -15,6 +15,16 @@
                 <li v-for="org in orgs">{{ org.name }} </li>
             </ul>
         </div>
+        <div id="peerOrg3Employees" class="product-info">Employees for peerOrg3
+            <ul class="v-list">
+                <li v-for="value in peerOrg3Employees" >{{ value }}</li>
+            </ul>
+        </div>
+        <div id="peerOrg4Employees" class="product-info">Employees for peerOrg4
+            <ul class="v-list">
+                <li v-for="value in peerOrg4Employees" >{{ value }}</li>
+            </ul>
+        </div>
         <div id="medical" >Medical
             <ul class="v-list">
                 <li v-for="value in medical" >{{ value[0] }} => {{ value[1] }}</li>
@@ -39,6 +49,8 @@
             orgs: [],
             worker: [],
             medical: [],
+            peerOrg3Employees: [],
+            peerOrg4Employees: [],
             polling: null
         },
         computed: {
@@ -81,6 +93,17 @@
                 .then(json => {
                     this.medical = json
             })
+            fetch('employees/peerOrg3')
+                .then(response => response.json())
+                .then(json => {
+                    this.peerOrg3Employees = json
+            })
+            fetch('employees/peerOrg4')
+                .then(response => response.json())
+                .then(json => {
+                    this.peerOrg4Employees = json
+            })
+            peerOrg3Employees
             this.pollData()
         }
     })

@@ -16,7 +16,6 @@ import scala.io.StdIn
 import scala.util.{Failure, Success}
 
 
-
 case class Resp(key: String, value: String)
 
 case class Req(key: String, value: String, resp: Option[Resp])
@@ -71,17 +70,33 @@ object WebServer extends JsonSupport {
         },
         pathPrefix("web") {
           getFromDirectory("./src/main/web") // uses implicit ContentTypeResolver
-        }
-        , path("users") {
+        },
+        pathPrefix("employees") {
+          concat(
+            path("peerOrg3") {
+              get {
+                complete(bootstrapSpec.peerOrg3Employees.sorted)
+              }
+            },
+            path("peerOrg4") {
+              get {
+                complete(bootstrapSpec.peerOrg4Employees.sorted)
+              }
+            }
+          )
+        },
+        path("users") {
           get {
             complete(bootstrapSpec.ctx.getDirectory.get.users)
           }
-        }, path("orgs") {
+        },
+        path("orgs") {
           get {
             val orgs = bootstrapSpec.ctx.getDirectory.get.orgs
             complete(orgs)
           }
-        }, path("medical") {
+        },
+        path("medical") {
           get {
             val result = bootstrapSpec.queryAllMedical.runToFuture(monix.execution.Scheduler.Implicits.global)
             onComplete(result) {

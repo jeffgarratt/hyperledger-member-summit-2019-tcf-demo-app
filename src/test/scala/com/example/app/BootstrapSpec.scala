@@ -8,6 +8,7 @@ import java.time.{LocalDateTime, ZoneOffset}
 import com.github.jeffgarratt.hl.fabric.sdk.Bootstrap.ChannelId
 import com.github.jeffgarratt.hl.fabric.sdk._
 import com.google.protobuf.ByteString
+import com.typesafe.config.ConfigFactory
 import main.app.{AppDescriptor, AppDescriptors, Query}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -43,6 +44,19 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
   def getMedicalChannelForOrg(medicalOrg : Organization) = {
     s"com.${medicalOrg.name.toLowerCase()}.blockchain.channel.medical"
   }
+
+  val conf = ConfigFactory.load()
+  val patientCount = conf.getInt("app.patients.count")
+  val patients = Range(0, patientCount).map(i => f"patient_${i}%03d")
+  val numBusinesses = 2
+  val slideVal = patientCount % numBusinesses match {
+    case 0 => patientCount /numBusinesses
+    case _ => patientCount / numBusinesses + 1
+  }
+  val randomWindowedPatients = scala.util.Random.shuffle(patients).sliding(slideVal, slideVal).toList
+  val peerOrg3Employees = randomWindowedPatients(0).toList
+  val peerOrg4Employees = randomWindowedPatients(1).toList
+
 
   val peerOrg0 = ctx.getDirectory.get.orgs.find(_.name == "peerOrg0").get
   val peerOrg1 = ctx.getDirectory.get.orgs.find(_.name == "peerOrg1").get
