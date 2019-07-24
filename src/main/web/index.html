@@ -30,7 +30,18 @@
                 <li v-for="value in medical" >{{ value[0] }} => {{ value[1] }}</li>
             </ul>
         </div>
-        <div id="workers" >Worker
+        <div id="workers" class="product-info">Worker
+            <form v-on:submit.prevent="handleSubmit">
+                <div class="field is-grouped">
+                    <label class="label">Name</label>
+                    <div class="control">
+                        <input v-model="form.name" class="input" type="text" placeholder="Text input">
+                    </div>
+                    <div class="control">
+                        <button class="button is-primary">Submit</button>
+                    </div>
+                </div>
+            </form>
             <ul class="v-list">
                 <li v-for="(value, name) in worker_records" >{{ value.key }}  => {{ value.resp ? value.resp.key : "PENDING" }}</li>
             </ul>
@@ -40,11 +51,16 @@
 
 
 <script src="https://unpkg.com/vue"></script>
+<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
 
 <script>
+
     const app = new Vue({
         el: '#app',
         data: {
+            form : {
+                name: ''
+            },
             users: [],
             orgs: [],
             worker: [],
@@ -67,12 +83,24 @@
                             this.worker = json
                         })
                 }, 3000)
+            },
+            handleSubmit (event) {
+                console.log("Submitting" + this.form.name)
+                axios.post('worker', {
+                    key: this.form.name,
+                    value: "N/A"
+                }).then(function (response) {
+                        console.log(response);
+                }).catch(function (error) {
+                        console.log(error);
+                });
             }
         },
         beforeDestroy () {
             clearInterval(this.polling)
         },
         created() {
+            this.console = console
             fetch('users')
                 .then(response => response.json())
                 .then(json => {

@@ -108,7 +108,7 @@ object WebServer extends JsonSupport {
             }
           }
         }, path("worker") {
-          get {
+          concat(get {
             val result = bootstrapSpec.queryPeer7.runToFuture(monix.execution.Scheduler.Implicits.global)
             onComplete(result) {
               case Success(value) => {
@@ -117,7 +117,24 @@ object WebServer extends JsonSupport {
               }
               case Failure(ex) => complete((InternalServerError, s"An error occurred: ${ex.getMessage}"))
             }
-          }
+          },
+            post {
+              decodeRequest {
+                entity(as[Resp]) { resp =>
+                  // Create a worker request for the given business
+//                  bootstrapSpec.ctx.getDirectory.get.orgs.find(_.name == resp.key) match {
+//                    case Some(companyToRequestQuote) => {
+//
+//                    }
+//                    case None => {
+//
+//                    }
+//                  }
+                  scribe.debug(s"Request received for organization ${resp.key}")
+                  complete(s"Request received with resp => ${resp.key}")
+                }
+              }
+            })
         }, path("worker2") {
           get {
             val result = bootstrapSpec.queryPeer7.flatMap(x => Task.eval(x.values.head.descriptors.map { case (a, b) => (a, b.description) })).runToFuture(monix.execution.Scheduler.Implicits.global)
