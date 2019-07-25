@@ -121,17 +121,36 @@ object WebServer extends JsonSupport {
             post {
               decodeRequest {
                 entity(as[Resp]) { resp =>
-                  // Create a worker request for the given business
-//                  bootstrapSpec.ctx.getDirectory.get.orgs.find(_.name == resp.key) match {
-//                    case Some(companyToRequestQuote) => {
-//
-//                    }
-//                    case None => {
-//
-//                    }
-//                  }
-                  scribe.debug(s"Request received for organization ${resp.key}")
-                  complete(s"Request received with resp => ${resp.key}")
+                  (resp.key match {
+                    case "peerOrg3" => {
+                      Right(bootstrapSpec.peerOrg3Employees)
+                    }
+                    case "peerOrg4" => {
+                      Right(bootstrapSpec.peerOrg3Employees)
+                    }
+                    case _ => Left("Expected either 'peerOrg3' or 'peerOrg4' for value")
+                  }) match {
+                    case Right(employeesToScore) => {
+                      val result = bootstrapSpec.queryAllMedical.runToFuture(monix.execution.Scheduler.Implicits.global)
+                      onComplete(result) {
+                        case Success(value) => {
+                          val result = value.map(m => m.keys.head -> m.values.head.descriptors.map { case (a, b) => (a, b.description) })
+                          val allMedicalRecords = result.map(t2 => t2._2).flatten
+                          scribe.debug(s"Request received for organization ${resp.key}")
+                          scribe.debug(s"Returning result =>  ${allMedicalRecords.sortBy(x => x._1)}")
+                          complete(allMedicalRecords.sortBy(x => x._1))
+                        }
+                        case Failure(ex) => complete((InternalServerError, s"An error occurred: ${ex.getMessage}"))
+                      }
+
+                    }
+                    case Left(msg) => {
+                      scribe.debug(s"An error occurred: ${msg}")
+                      complete((BadRequest, s"An error occurred: ${msg}"))
+                    }
+                  }
+//                  scribe.debug(s"Request received for organization ${resp.key}")
+//                  complete(s"Request received with resp => ${resp.key}")
                 }
               }
             })

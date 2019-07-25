@@ -25,7 +25,75 @@ import scala.collection.concurrent.TrieMap
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
+case class ScoreInput(score_age : Int)
+//+ score_sex(std::stoi(medData[1])) * 0.01
+//+ score_cp(std::stoi(medData[2])) * 0.21
+//+ score_trestbps(std::stoi(medData[3])) * 0.05
+//+ score_chol(std::stoi(medData[4])) * 0.05
+//+ score_fbs(std::stoi(medData[5])) * 0.04
+//+ score_restecg(std::stoi(medData[6])) * 0.19
+//+ score_thalach(std::stoi(medData[7])) * 0.06
+//+ score_exang_oldpeak(std::stoi(medData[8])) * 0.18
+//+ score_exang_oldpeak(std::stoi(medData[9])) * 0.05
+//+ score_slop(std::stoi(medData[10])) * 0.03
+//+ score_ca(std::stoi(medData[11])) * 0.04
+//+ score_thaldur(std::stoi(medData[12])) * 0.02
+//+ score_num(std::stoi(medData[13])) * 0.04 );)
+
+
+
 class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with AppendedClues {
+
+  // Workorder input format
+  val sampleInputJSON = """{
+  "jsonrpc": "2.0",
+  "method": "WorkOrderSubmit",
+  "id": 14,
+  "params": {
+    "responseTimeoutMSecs": 6000,
+    "payloadFormat": "pformat",
+    "resultUri": "resulturi",
+    "notifyUri": "notifyuri",
+    "workOrderId": "0x1234ABCD",
+    "workerId": "",
+    "workloadId": "0x2345",
+    "requesterId": "0x3456",
+    "workerEncryptionKey": "0x6789",
+    "dataEncryptionAlgorithm": "AES-GCM-256",
+    "encryptedSessionKey": "sessionkey",
+    "sessionKeyIv": "Iv",
+    "requesterNonce": "",
+    "encryptedRequestHash": "requesthash",
+    "requesterSignature": "",
+    "inData": [
+  {
+    "index": 1,
+    "dataHash": "dcba4444",
+    "data": "Heart disease evaluation data: 32 1 1 156  132 125 1 95  1 0 1 1 3 1",
+    "encryptedDataEncryptionKey": "-",
+    "iv": ""
+  },
+  {
+    "index": 0,
+    "dataHash": "abcd5555",
+    "data": "heart-disease-eval:",
+    "encryptedDataEncryptionKey": "-",
+    "iv": ""
+  }
+    ],
+    "outData": [
+  {
+    "index": 0,
+    "dataHash": "mhash555",
+    "data": "",
+    "encryptedDataEncryptionKey": "-",
+    "iv": ""
+  }
+    ],
+    "verifyingKey": ""
+  }
+}"""
+
 
   val ctx = BootstrapSpec.getContext(projectName)
 
