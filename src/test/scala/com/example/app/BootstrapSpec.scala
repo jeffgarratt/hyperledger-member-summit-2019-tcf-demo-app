@@ -24,8 +24,24 @@ import org.scalatest.{AppendedClues, FunSpec, GivenWhenThen}
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.Await
 import scala.concurrent.duration._
+import scala.util.Random
 
-case class ScoreInput(score_age : Int)
+case class ScoreInput(age: Int = BootstrapSpec.getRandInt(21,95),
+                      sex: Int = 1,
+                      cp: Int = 1,
+                      trestbps: Int = 156,
+                      chol: Int = 132,
+                      fbs: Int = 125,
+                      restecg: Int = 32,
+                      thalach: Int = 32,
+                      exang_oldpeak: Int = 32,
+                      slop: Int = 32,
+                      ca: Int = 32,
+                      thaldur: Int = 32,
+                      num: Int = 32
+                     )
+
+// 32 1 1 156  132 125 1 95  1 0 1 1 3 1
 //+ score_sex(std::stoi(medData[1])) * 0.01
 //+ score_cp(std::stoi(medData[2])) * 0.21
 //+ score_trestbps(std::stoi(medData[3])) * 0.05
@@ -41,11 +57,12 @@ case class ScoreInput(score_age : Int)
 //+ score_num(std::stoi(medData[13])) * 0.04 );)
 
 
-
 class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with AppendedClues {
 
+
   // Workorder input format
-  val sampleInputJSON = """{
+  val sampleInputJSON =
+    """{
   "jsonrpc": "2.0",
   "method": "WorkOrderSubmit",
   "id": 14,
@@ -109,7 +126,7 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
   val deliverSpecPeer0 = Deliver.DeliverSpec(dev0Org0, nodeAdminTuple, defaultChannelName, "peer0", port = 7051, seekInfo = Deliver.seekInfoAllAndWait, timeout = 10 minutes)
   val broadcastSpecOrderer0 = Orderer.BroadcastSpec(nodeName = "orderer0", timeout = 10 minutes)
 
-  def getMedicalChannelForOrg(medicalOrg : Organization) = {
+  def getMedicalChannelForOrg(medicalOrg: Organization) = {
     s"com.${medicalOrg.name.toLowerCase()}.blockchain.channel.medical"
   }
 
@@ -118,7 +135,7 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
   val patients = Range(0, patientCount).map(i => f"patient_${i}%03d")
   val numBusinesses = 2
   val slideVal = patientCount % numBusinesses match {
-    case 0 => patientCount /numBusinesses
+    case 0 => patientCount / numBusinesses
     case _ => patientCount / numBusinesses + 1
   }
   val randomWindowedPatients = scala.util.Random.shuffle(patients).sliding(slideVal, slideVal).toList
@@ -142,12 +159,12 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
   val queryPeer0 = getQuery(Query(), cc.copy(endorsers = List("peer0")), Some(getMedicalChannelForOrg(peerOrg0)))
   val queryPeer1 = getQuery(Query(), cc.copy(endorsers = List("peer1")), Some(getMedicalChannelForOrg(peerOrg1)))
   val queryPeer2 = getQuery(Query(), cc.copy(endorsers = List("peer2")), Some(getMedicalChannelForOrg(peerOrg2)))
-  val queryAllMedical = Task.gatherUnordered(List(queryPeer0,queryPeer1,queryPeer2))
+  val queryAllMedical = Task.gatherUnordered(List(queryPeer0, queryPeer1, queryPeer2))
 
   val queryPeer7 = getQuery(Query(), cc.copy(endorsers = List("peer7")), Some("com.peerorg7.blockchain.channel.worker"))
 
 
-  def getLocalDateTime(proposal : Proposal ) = {
+  def getLocalDateTime(proposal: Proposal) = {
     val header = Header.parseFrom(proposal.header.toByteArray)
     val channelHeader = ChannelHeader.parseFrom(header.channelHeader.toByteArray)
     LocalDateTime.ofEpochSecond(channelHeader.timestamp.get.seconds, channelHeader.timestamp.get.nanos, ZoneOffset.UTC)
@@ -157,7 +174,7 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
   * Validates the proposalResponse that represents the ability of an insurer to get medical info.
   *
   * */
-  def validateSig(pr : ProposalResponse) = {
+  def validateSig(pr: ProposalResponse) = {
     // First verify the signature on the proposalResponse
     val certificateFactory = CertificateFactory.getInstance("X509")
     val si = SerializedIdentity.parseFrom(pr.endorsement.get.endorser.toByteArray)
@@ -193,7 +210,7 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
   }
 
   // Query for a value, use a factory to create query tasks
-  def getQuery(query: Query, chaincodeHelper: ChaincodeHelper, channelName :Option[String] = Some(defaultChannelName)) = {
+  def getQuery(query: Query, chaincodeHelper: ChaincodeHelper, channelName: Option[String] = Some(defaultChannelName)) = {
     val getInvocationSpec = Endorser.InvocationSpec(_: ChaincodeSpec, channelName = channelName, proposalResponseHandler = Some(Endorser.getHandler(AppDescriptors)))
     Task.eval({
       val irSet = Await.result(ChaincodeHelper.getTask(chaincodeHelper.send(getInvocationSpec(getChaincodeSpec(List(ByteString.copyFromUtf8("getAppDescriptors"), query.toByteString))))).runToFuture, 1.seconds)
@@ -202,7 +219,7 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
   }
 
   // Query for a value, use a factory to create query tasks
-  def getQueryRaw(query: Query, chaincodeHelper: ChaincodeHelper, channelName :Option[String] = Some(defaultChannelName)) = {
+  def getQueryRaw(query: Query, chaincodeHelper: ChaincodeHelper, channelName: Option[String] = Some(defaultChannelName)) = {
     val getInvocationSpec = Endorser.InvocationSpec(_: ChaincodeSpec, channelName = channelName, proposalResponseHandler = Some(Endorser.getHandler(AppDescriptors)))
     Task.eval({
       val irSet = Await.result(ChaincodeHelper.getTask(chaincodeHelper.send(getInvocationSpec(getChaincodeSpec(List(ByteString.copyFromUtf8("getAppDescriptors"), query.toByteString))))).runToFuture, 1.seconds)
@@ -212,7 +229,7 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
 
 
   val createRequestIdTask = Task.eval {
-      s"REQ-${new String(Hex.encode(Bootstrap.getNonce.toByteArray))}"
+    s"REQ-${new String(Hex.encode(Bootstrap.getNonce.toByteArray))}"
   }
 
   def getTask[A](ccFunc: => Either[String, List[Either[String, Endorser.Interaction[A]]]], timeout: Duration = 1 seconds) = {
@@ -227,7 +244,7 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
   }
 
   // Invoker tasks
-  def getCreateAppDescriptor(chaincodeHelper: ChaincodeHelper, user: User, channelName : ChannelId, appDescriptorKey : String, appDescriptor: AppDescriptor) = {
+  def getCreateAppDescriptor(chaincodeHelper: ChaincodeHelper, user: User, channelName: ChannelId, appDescriptorKey: String, appDescriptor: AppDescriptor) = {
     val gis = Endorser.InvocationSpec(_: ChaincodeSpec, channelName = Some(channelName), proposalResponseHandler = Some(Endorser.getHandler(AppDescriptor)))
     Task.eval({
       val taskInvoker = getTask(chaincodeHelper.send(gis(getChaincodeSpec(List(ByteString.copyFromUtf8("createAppDescriptor"), ByteString.copyFromUtf8(appDescriptorKey), appDescriptor.toByteString)))))
@@ -236,12 +253,12 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
       val signedTx = Bootstrap.createSignedTransaction(user, irSet)
       val results = (signedTx, irSet)
       results
-//      val signedTx = Bootstrap.createSignedTransaction(user, irSet).right.get
-//      signedTx
+      //      val signedTx = Bootstrap.createSignedTransaction(user, irSet).right.get
+      //      signedTx
     })
   }
 
-  def getCreateRecordInteraction(nat : NodeAdminTuple, targetPeer : String, channelId: ChannelId, key : String, value : AppDescriptor)  = {
+  def getCreateRecordInteraction(nat: NodeAdminTuple, targetPeer: String, channelId: ChannelId, key: String, value: AppDescriptor) = {
     Task.eval({
       val result = Await.result(getCreateAppDescriptor(cchExample02.copy(user = nat.user, node_admin_tuple = nat, endorsers = List(targetPeer)), nat.user, channelId, key, value).runToFuture, 1.seconds)
       result._1 match {
@@ -319,7 +336,7 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
 
       When("user invokes the transfer operation from a to b of value 10")
 
-      val fullTxTask = ctx.getFullTxTask(getInvoker(cchExample02, dev0Org0,"a", "b", "10"), broadcastSpecOrderer0, deliverSpecPeer0)
+      val fullTxTask = ctx.getFullTxTask(getInvoker(cchExample02, dev0Org0, "a", "b", "10"), broadcastSpecOrderer0, deliverSpecPeer0)
       val result = fullTxTask.runToFuture
       Await.result(result, 3 seconds)
 
@@ -339,7 +356,7 @@ class BootstrapSpec(projectName: String) extends FunSpec with GivenWhenThen with
       When("user invokes the transfer operation from b to a of value 10")
       val requestId = Await.result(createRequestIdTask.runToFuture, 1.seconds)
       val createAppDescriptorTask = getCreateAppDescriptor(cchExample02, dev0Org0, getMedicalChannelForOrg(peerOrg0), requestId, AppDescriptor(description = "105"))
-      val interaction = ctx.Interaction(getInvoker(cchExample02, dev0Org0,"b", "a", "10"), broadcastSpecOrderer0, deliverSpecPeer0)
+      val interaction = ctx.Interaction(getInvoker(cchExample02, dev0Org0, "b", "a", "10"), broadcastSpecOrderer0, deliverSpecPeer0)
       val result = interaction.fullTxTask.runToFuture
       Await.result(result, 3 seconds)
 
@@ -384,6 +401,16 @@ object BootstrapSpec {
     contextMap.getOrElseUpdate(projectName, {
       new LocalDockerContext(projectName = projectName, rootPath = "/opt/gopath/src/github.com/hyperledger/fabric/fabric-explorer".split("/") ++ Seq("tmp"))
     })
+  }
+
+  val rand = Random
+
+  def getRandInt(min: Int, max: Int) = {
+    var num = -1
+    while (num < min) {
+      num = rand.nextInt(max)
+    }
+    num
   }
 
 }
