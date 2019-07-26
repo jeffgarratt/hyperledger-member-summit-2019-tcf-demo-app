@@ -27,14 +27,16 @@ trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
   implicit val orgFormat = jsonFormat4(Organization)
   implicit val respFormat = jsonFormat2(Resp)
   implicit val reqFormat = jsonFormat3(Req)
+
 }
 
 
-object WebServer extends JsonSupport {
+object WebServer extends JsonSupport with ScoreInputJsonSupport {
+
   // Load our own config values from the default location, application.conf
   val conf = ConfigFactory.load()
   val prototypeProjectName = conf.getString("fabric.prototype.projectName")
-  val bootstrapSpec = new DemoApp(prototypeProjectName)(monix.execution.Scheduler.Implicits.global)
+  val app = new DemoApp(prototypeProjectName)(monix.execution.Scheduler.Implicits.global)
 
 
   def getRequestFromRecords(records: Map[String, String]) = {
@@ -75,30 +77,30 @@ object WebServer extends JsonSupport {
           concat(
             path("peerOrg3") {
               get {
-                complete(bootstrapSpec.peerOrg3Employees.sorted)
+                complete(app.peerOrg3Employees.sorted)
               }
             },
             path("peerOrg4") {
               get {
-                complete(bootstrapSpec.peerOrg4Employees.sorted)
+                complete(app.peerOrg4Employees.sorted)
               }
             }
           )
         },
         path("users") {
           get {
-            complete(bootstrapSpec.ctx.getDirectory.get.users)
+            complete(app.ctx.getDirectory.get.users)
           }
         },
         path("orgs") {
           get {
-            val orgs = bootstrapSpec.ctx.getDirectory.get.orgs
+            val orgs = app.ctx.getDirectory.get.orgs
             complete(orgs)
           }
         },
         path("medical") {
           get {
-            val result = bootstrapSpec.queryAllMedical.runToFuture(monix.execution.Scheduler.Implicits.global)
+            val result = app.queryAllMedical.runToFuture(monix.execution.Scheduler.Implicits.global)
             onComplete(result) {
               case Success(value) => {
                 val result = value.map(m => m.keys.head -> m.values.head.descriptors.map { case (a, b) => (a, b.description) })
@@ -109,7 +111,7 @@ object WebServer extends JsonSupport {
           }
         }, path("worker") {
           concat(get {
-            val result = bootstrapSpec.queryPeer7.runToFuture(monix.execution.Scheduler.Implicits.global)
+            val result = app.queryPeer7.runToFuture(monix.execution.Scheduler.Implicits.global)
             onComplete(result) {
               case Success(value) => {
                 val r = value.map { case (k, v) => (k, v.descriptors.map { case (k1, v1) => (k1, v1.description) }) }
@@ -123,22 +125,24 @@ object WebServer extends JsonSupport {
                 entity(as[Resp]) { resp =>
                   (resp.key match {
                     case "peerOrg3" => {
-                      Right(bootstrapSpec.peerOrg3Employees)
+                      Right(app.peerOrg3Employees)
                     }
                     case "peerOrg4" => {
-                      Right(bootstrapSpec.peerOrg3Employees)
+                      Right(app.peerOrg4Employees)
                     }
                     case _ => Left("Expected either 'peerOrg3' or 'peerOrg4' for value")
                   }) match {
                     case Right(employeesToScore) => {
-                      val result = bootstrapSpec.queryAllMedical.runToFuture(monix.execution.Scheduler.Implicits.global)
+                      val result = app.queryAllMedical.runToFuture(monix.execution.Scheduler.Implicits.global)
                       onComplete(result) {
                         case Success(value) => {
                           val result = value.map(m => m.keys.head -> m.values.head.descriptors.map { case (a, b) => (a, b.description) })
                           val allMedicalRecords = result.map(t2 => t2._2).flatten
                           scribe.debug(s"Request received for organization ${resp.key}")
                           scribe.debug(s"Returning result =>  ${allMedicalRecords.sortBy(x => x._1)}")
-                          complete(allMedicalRecords.sortBy(x => x._1))
+                          val filtered = allMedicalRecords.filter(p => employeesToScore.exists(_ == p._1)).sortBy(x => x._1)
+
+                          complete(app.getWorkOrderFromPatientData(filtered))
                         }
                         case Failure(ex) => complete((InternalServerError, s"An error occurred: ${ex.getMessage}"))
                       }
@@ -156,7 +160,7 @@ object WebServer extends JsonSupport {
             })
         }, path("worker2") {
           get {
-            val result = bootstrapSpec.queryPeer7.flatMap(x => Task.eval(x.values.head.descriptors.map { case (a, b) => (a, b.description) })).runToFuture(monix.execution.Scheduler.Implicits.global)
+            val result = app.queryPeer7.flatMap(x => Task.eval(x.values.head.descriptors.map { case (a, b) => (a, b.description) })).runToFuture(monix.execution.Scheduler.Implicits.global)
             onComplete(result) {
               case Success(value) => {
                 // Now get array of Req objects.

@@ -56,12 +56,48 @@ case class ScoreInput(age: Int = SampleContext.getRandInt(21, 95),
 //+ score_thaldur(std::stoi(medData[12])) * 0.02
 //+ score_num(std::stoi(medData[13])) * 0.04 );)
 
+
+case class Params(val responseTimeoutMSecs: Int = 6000,
+                  val payloadFormat: String = "pformat",
+                  val resultUri: String = "resulturi",
+                  val notifyUri: String = "notifyuri",
+                  val workOrderId: String = "0x1234ABCD",
+                  val workerId: String = "",
+                  val workloadId: String = "0x2345",
+                  val requesterId: String = "0x3456",
+                  val workerEncryptionKey: String = "0x6789",
+                  val dataEncryptionAlgorithm: String = "AES-GCM-256",
+                  val encryptedSessionKey: String = "sessionkey",
+                  val sessionKeyIv: String = "Iv",
+                  val requesterNonce: String = "",
+                  val encryptedRequestHash: String = "requesthash",
+                  val requesterSignature: String = "")
+
+case class Data(val index: Int = 0,
+                val dataHash: String,
+                val data: String,
+                val encryptedDataEncryptionKey: String,
+                val iv: String)
+
+case class WorkOrder(val jsonrpc: String = "2.0",
+                     val method: String = "WorkOrderSubmit",
+                     val id: Int,
+                     val params: Params,
+                     val inData: List[Data],
+                     val outData: List[Data],
+                     val verifyingKey: String)
+
+
 trait ScoreInputJsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
   implicit val scoreInputFormat = jsonFormat13(ScoreInput)
+  implicit val paramsFormat = jsonFormat15(Params)
+  implicit val dataFormat = jsonFormat5(Data)
+  implicit val workOrderFormat = jsonFormat7(WorkOrder)
 }
 
 class DemoApp(val projectName: String = SampleContext.conf.getString("fabric.prototype.projectName"))(implicit scheduler: Scheduler) extends ScoreInputJsonSupport {
 
+  import spray.json._
 
   // Workorder input format
   val sampleInputJSON =
@@ -273,7 +309,7 @@ class DemoApp(val projectName: String = SampleContext.conf.getString("fabric.pro
     })
   }
 
-  def getRandomPatientGroups(patients : IndexedSeq[String] = patients, numGroups : Int = numHospitals) = {
+  def getRandomPatientGroups(patients: IndexedSeq[String] = patients, numGroups: Int = numHospitals) = {
     val slideVal = patients.size % numGroups match {
       case 0 => patients.size / numGroups
       case _ => patients.size / numGroups + 1
@@ -289,21 +325,35 @@ class DemoApp(val projectName: String = SampleContext.conf.getString("fabric.pro
   }
 
   def getAllCreateRecordInteractions() = {
-    import spray.json._
-    val patientToAppDescriptor = getSampleDataForHospitals().zipWithIndex.map{ case (m,index) =>
-      m.map {case (k,v) => {
+    val patientToAppDescriptor = getSampleDataForHospitals().zipWithIndex.map { case (m, index) =>
+      m.map { case (k, v) => {
         val user = ctx.getDirectory.get.users.find(_.name == s"dev0Org${index}").get
         val nat = Directory.natsForUser(ctx.getDirectory.get, user)(0)
         val peerId = s"peer${index}"
         val peerOrg = ctx.getDirectory.get.orgs.find(_.name == s"peerOrg${index}").get
         val channelId = getMedicalChannelForOrg(peerOrg)
-        k -> getCreateRecordInteraction(nat, peerId, channelId, k, AppDescriptor(description=v.toJson.toString))}
+        k -> getCreateRecordInteraction(nat, peerId, channelId, k, AppDescriptor(description = v.toJson.toString))
+      }
       }
     }
     patientToAppDescriptor
     //patientToAppDescriptor.map(m => m.map())
     // .map(m => m.map {case (k,v) => k -> AppDescriptor(description=v.toJson.toString)})
 
+  }
+
+  def getWorkOrderFromPatientData(patientData: List[(String, String)]) = {
+    val params = Params()
+    val inData = patientData.map(entry => entry._2.parseJson.convertTo[ScoreInput]).zipWithIndex.map { case (scoreInput, index) =>
+      Data(index = index + 1, data = s"Heart disease evaluation data: ${scoreInput.productIterator.mkString(" ")}", dataHash = "", encryptedDataEncryptionKey = "", iv = "")
+    }
+
+    val workOrder = WorkOrder(id = 14,
+      params = params,
+      inData = List(Data(index = 0, data = "heart-disease-eval:", dataHash="", encryptedDataEncryptionKey = "", iv = "")) ++ inData,
+      outData = List[Data](),
+      verifyingKey = "verifyingKeyData")
+    workOrder
   }
 
 }
