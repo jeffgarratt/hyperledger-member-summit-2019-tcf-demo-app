@@ -7,7 +7,7 @@ import scala.collection.concurrent.TrieMap
 import scala.util.Random
 
 class SampleContext(override val projectName: String, override val rootPath: Seq[String]) extends LocalDockerContext(projectName = projectName, rootPath = rootPath) {
-  
+
 }
 
 

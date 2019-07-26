@@ -5,6 +5,7 @@ import java.security.Signature
 import java.security.cert.CertificateFactory
 import java.time.{LocalDateTime, ZoneOffset}
 
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import com.github.jeffgarratt.hl.fabric.sdk.Bootstrap.ChannelId
 import com.github.jeffgarratt.hl.fabric.sdk._
 import com.google.protobuf.ByteString
@@ -18,6 +19,7 @@ import org.hyperledger.fabric.protos.msp.identities.SerializedIdentity
 import org.hyperledger.fabric.protos.peer.chaincode.ChaincodeSpec
 import org.hyperledger.fabric.protos.peer.proposal.Proposal
 import org.hyperledger.fabric.protos.peer.proposal_response.ProposalResponse
+import spray.json.DefaultJsonProtocol
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -38,6 +40,7 @@ case class ScoreInput(age: Int = SampleContext.getRandInt(21, 95),
                       num: Int = 32
                      )
 
+
 // 32 1 1 156  132 125 1 95  1 0 1 1 3 1
 //+ score_sex(std::stoi(medData[1])) * 0.01
 //+ score_cp(std::stoi(medData[2])) * 0.21
@@ -53,8 +56,11 @@ case class ScoreInput(age: Int = SampleContext.getRandInt(21, 95),
 //+ score_thaldur(std::stoi(medData[12])) * 0.02
 //+ score_num(std::stoi(medData[13])) * 0.04 );)
 
+trait ScoreInputJsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
+  implicit val scoreInputFormat = jsonFormat13(ScoreInput)
+}
 
-class DemoApp(val projectName: String)(implicit scheduler: Scheduler) {
+class DemoApp(val projectName: String = SampleContext.conf.getString("fabric.prototype.projectName"))(implicit scheduler: Scheduler) extends ScoreInputJsonSupport {
 
 
   // Workorder input format
@@ -129,6 +135,7 @@ class DemoApp(val projectName: String)(implicit scheduler: Scheduler) {
   val patientCount = SampleContext.conf.getInt("app.patients.count")
   val patients = Range(0, patientCount).map(i => f"patient_${i}%03d")
   val numBusinesses = 2
+  val numHospitals = 3
   val slideVal = patientCount % numBusinesses match {
     case 0 => patientCount / numBusinesses
     case _ => patientCount / numBusinesses + 1
@@ -264,6 +271,39 @@ class DemoApp(val projectName: String)(implicit scheduler: Scheduler) {
         case Left(msg) => Left(msg, result._2)
       }
     })
+  }
+
+  def getRandomPatientGroups(patients : IndexedSeq[String] = patients, numGroups : Int = numHospitals) = {
+    val slideVal = patients.size % numGroups match {
+      case 0 => patients.size / numGroups
+      case _ => patients.size / numGroups + 1
+    }
+    val randomWindowedPatients = scala.util.Random.shuffle(patients).sliding(slideVal, slideVal).toList
+    randomWindowedPatients
+  }
+
+  def getSampleDataForHospitals() = {
+    val randWindowedPatients = getRandomPatientGroups(patients, numHospitals)
+    val result = randWindowedPatients.map(set => set.map(entry => entry -> ScoreInput()).toMap)
+    result
+  }
+
+  def getAllCreateRecordInteractions() = {
+    import spray.json._
+    val patientToAppDescriptor = getSampleDataForHospitals().zipWithIndex.map{ case (m,index) =>
+      m.map {case (k,v) => {
+        val user = ctx.getDirectory.get.users.find(_.name == s"dev0Org${index}").get
+        val nat = Directory.natsForUser(ctx.getDirectory.get, user)(0)
+        val peerId = s"peer${index}"
+        val peerOrg = ctx.getDirectory.get.orgs.find(_.name == s"peerOrg${index}").get
+        val channelId = getMedicalChannelForOrg(peerOrg)
+        k -> getCreateRecordInteraction(nat, peerId, channelId, k, AppDescriptor(description=v.toJson.toString))}
+      }
+    }
+    patientToAppDescriptor
+    //patientToAppDescriptor.map(m => m.map())
+    // .map(m => m.map {case (k,v) => k -> AppDescriptor(description=v.toJson.toString)})
+
   }
 
 }
