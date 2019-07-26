@@ -27,7 +27,6 @@ trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
   implicit val orgFormat = jsonFormat4(Organization)
   implicit val respFormat = jsonFormat2(Resp)
   implicit val reqFormat = jsonFormat3(Req)
-  implicit val scoreInputFormat = jsonFormat13(ScoreInput)
 }
 
 
@@ -35,7 +34,7 @@ object WebServer extends JsonSupport {
   // Load our own config values from the default location, application.conf
   val conf = ConfigFactory.load()
   val prototypeProjectName = conf.getString("fabric.prototype.projectName")
-  val bootstrapSpec = new BootstrapSpec(prototypeProjectName)
+  val bootstrapSpec = new DemoApp(prototypeProjectName)(monix.execution.Scheduler.Implicits.global)
 
 
   def getRequestFromRecords(records: Map[String, String]) = {
