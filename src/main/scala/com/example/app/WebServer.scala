@@ -9,11 +9,14 @@ import akka.http.scaladsl.server.directives.ContentTypeResolver.Default
 import akka.stream.ActorMaterializer
 import com.github.jeffgarratt.hl.fabric.sdk.{Organization, User}
 import com.typesafe.config.ConfigFactory
+import main.app.AppDescriptor
 import monix.eval.Task
-import spray.json.DefaultJsonProtocol
+import spray.json._
 
 import scala.io.StdIn
 import scala.util.{Failure, Success}
+import scala.concurrent.Await
+import scala.concurrent.duration._
 
 
 case class Resp(key: String, value: String)
@@ -32,12 +35,10 @@ trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
 
 
 object WebServer extends JsonSupport with ScoreInputJsonSupport {
-
   // Load our own config values from the default location, application.conf
   val conf = ConfigFactory.load()
   val prototypeProjectName = conf.getString("fabric.prototype.projectName")
   val app = new DemoApp(prototypeProjectName)(monix.execution.Scheduler.Implicits.global)
-
 
   def getRequestFromRecords(records: Map[String, String]) = {
     val allRequestKeys = records.keys.filter(x => x.startsWith("REQ"))
@@ -141,8 +142,18 @@ object WebServer extends JsonSupport with ScoreInputJsonSupport {
                           scribe.debug(s"Request received for organization ${resp.key}")
                           scribe.debug(s"Returning result =>  ${allMedicalRecords.sortBy(x => x._1)}")
                           val filtered = allMedicalRecords.filter(p => employeesToScore.exists(_ == p._1)).sortBy(x => x._1)
+                          val newWorkOrder = app.getWorkOrderFromPatientData(filtered)
+                          val createRecordInteractionTask = app.getCreateRecordInteraction(app.natDev0Org7, "peer7", "com.peerorg7.blockchain.channel.worker", app.createRequestId, AppDescriptor(description = newWorkOrder.toJson.toString()))
+                          Await.result(createRecordInteractionTask.runToFuture(monix.execution.Scheduler.Implicits.global), 1.seconds) match {
+                            case Right((interaction, irSet)) => {
+                              val result = Await.result(interaction.fullTxTask.runToFuture(monix.execution.Scheduler.Implicits.global), 3.seconds)
+                              complete(newWorkOrder)
+                            }
+                            case Left(msg) => {
+                              complete((InternalServerError, s"An error occurred: ${msg}"))
+                            }
+                          }
 
-                          complete(app.getWorkOrderFromPatientData(filtered))
                         }
                         case Failure(ex) => complete((InternalServerError, s"An error occurred: ${ex.getMessage}"))
                       }

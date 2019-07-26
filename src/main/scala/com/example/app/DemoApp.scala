@@ -266,7 +266,7 @@ class DemoApp(val projectName: String = SampleContext.conf.getString("fabric.pro
   }
 
 
-  val createRequestIdTask = Task.eval {
+  def createRequestId = {
     s"REQ-${new String(Hex.encode(Bootstrap.getNonce.toByteArray))}"
   }
 
