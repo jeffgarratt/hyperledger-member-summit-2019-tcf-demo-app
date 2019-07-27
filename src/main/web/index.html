@@ -43,8 +43,15 @@
                 </div>
             </form>
             <ul class="v-list">
-                <li v-for="(value, name) in worker_records" >{{ value.key }}  => {{ value.resp ? value.resp.key : "PENDING" }}</li>
+                <li v-for="(value, name) in worker_records" >{{ value.key }}  => {{ value.resp ? value.resp.key : "PENDING" }}<button v-on:click="latestWorkOrder = value.value">Remove</button></li>
             </ul>
+        </div>
+        <div id="workOrderView" >WorkOrder View
+            <!--<textarea v-model="latestWorkOrder" rows="8" cols="40"></textarea>-->
+            <pre>{{ latestWorkOrder | pretty }}</pre>
+            <!--<ul class="v-list">-->
+                <!--<li v-for="value in medical" >{{ value[0] }} => {{ value[1] }}</li>-->
+            <!--</ul>-->
         </div>
     </div>
 </div>
@@ -67,7 +74,13 @@
             medical: [],
             peerOrg3Employees: [],
             peerOrg4Employees: [],
-            polling: null
+            polling: null,
+            latestWorkOrder: "{}"
+        },
+        filters: {
+            pretty: function(value) {
+                return JSON.stringify(JSON.parse(value), null, 2);
+            }
         },
         computed: {
             worker_records: function () {
